@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const Product = require("../models/Product");
 const Sale = require("../models/Sale");
 const Purchase = require("../models/Purchase");
@@ -29,7 +30,46 @@ router.get("/stats", protect, async (req, res) => {
     const purchases = await Purchase.find({ companyId });
     const totalPurchases = purchases.reduce((sum, purchase) => sum + (purchase.totalAmount || 0), 0);
 
-    // 5. Recent Activities
+    // 5. Total Stock Value
+    const products = await Product.find({ companyId });
+    const totalStockValue = products.reduce((sum, prod) => sum + ((prod.stock || 0) * (prod.price || 0)), 0);
+
+    // 6. Revenue History by Days (for Chart)
+    const daysQuery = Number(req.query.days) || 7;
+    const startDate = new Date();
+    startDate.setUTCDate(startDate.getUTCDate() - daysQuery + 1);
+    startDate.setUTCHours(0, 0, 0, 0);
+
+    const salesHistory = await Sale.aggregate([
+      {
+        $match: {
+          companyId: new mongoose.Types.ObjectId(companyId.toString()),
+          createdAt: { $gte: startDate }
+        }
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          total: { $sum: "$totalAmount" }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    const revenueHistory = [];
+    for (let i = 0; i < daysQuery; i++) {
+      const date = new Date(startDate);
+      date.setUTCDate(date.getUTCDate() + i);
+      const dateStr = date.toISOString().split("T")[0];
+      const matched = salesHistory.find(s => s._id === dateStr);
+      revenueHistory.push({
+        date: dateStr,
+        label: date.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" }),
+        amount: matched ? matched.total : 0
+      });
+    }
+
+    // 7. Recent Activities
     const recentProducts = await Product.find({ companyId })
       .sort({ createdAt: -1 })
       .limit(3);
@@ -49,6 +89,8 @@ router.get("/stats", protect, async (req, res) => {
       lowStockItems,
       totalSales,
       totalPurchases,
+      totalStockValue,
+      revenueHistory,
       recentProducts,
       recentSales,
       recentPurchases,

@@ -32,4 +32,38 @@ router.post("/", protect, async (req, res) => {
   }
 });
 
+// Update a customer
+router.put("/:id", protect, async (req, res) => {
+  try {
+    const { name, email, phone, address } = req.body;
+    const customer = await Customer.findOne({ _id: req.params.id, companyId: req.user.companyId });
+    if (!customer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
+    customer.name = name ?? customer.name;
+    customer.email = email ?? customer.email;
+    customer.phone = phone ?? customer.phone;
+    customer.address = address ?? customer.address;
+
+    const updatedCustomer = await customer.save();
+    res.json(updatedCustomer);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete a customer
+router.delete("/:id", protect, async (req, res) => {
+  try {
+    const customer = await Customer.findOneAndDelete({ _id: req.params.id, companyId: req.user.companyId });
+    if (!customer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+    res.json({ message: "Customer deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 module.exports = router;

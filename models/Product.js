@@ -11,10 +11,12 @@ const productSchema = new mongoose.Schema(
       required: true,
     },
     category: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
     },
     brand: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Brand",
     },
     price: {
       type: Number,
@@ -24,6 +26,28 @@ const productSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    variants: [
+      {
+        size: String,
+        color: String,
+        stock: {
+          type: Number,
+          default: 0,
+        },
+      }
+    ],
+    warehouseStocks: [
+      {
+        warehouseId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Warehouse",
+        },
+        stock: {
+          type: Number,
+          default: 0,
+        },
+      }
+    ],
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Company",

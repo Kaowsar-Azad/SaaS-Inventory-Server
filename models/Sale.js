@@ -25,6 +25,10 @@ const saleSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    taxAmount: {
+      type: Number,
+      default: 0,
+    },
     status: {
       type: String,
       enum: ["pending", "completed"],

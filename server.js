@@ -12,6 +12,10 @@ const saleRoutes = require("./routes/saleRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const userRoutes = require("./routes/userRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const categoryRoutes = require("./routes/categoryRoutes");
+const brandRoutes = require("./routes/brandRoutes");
+const warehouseRoutes = require("./routes/warehouseRoutes");
+const adjustmentRoutes = require("./routes/adjustmentRoutes");
 const User = require("./models/User");
 const bcrypt = require("bcryptjs");
 
@@ -19,7 +23,9 @@ const app = express();
 
 app.use(cors({
   origin: "http://localhost:3000",
-  credentials: true
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 }));
 app.use(express.json());
 
@@ -45,6 +51,10 @@ app.use("/api/sales", saleRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/brands", brandRoutes);
+app.use("/api/warehouses", warehouseRoutes);
+app.use("/api/adjustments", adjustmentRoutes);
 
 // Database connection
 const PORT = process.env.PORT || 5000;

@@ -26,8 +26,7 @@ const userSchema = new mongoose.Schema(
       type: String,
     },
     companyId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Company",
+      type: String,
     },
   },
   { timestamps: true }

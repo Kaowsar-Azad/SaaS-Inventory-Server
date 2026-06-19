@@ -1,0 +1,80 @@
+const express = require("express");
+const Brand = require("../models/Brand");
+const { protect } = require("../middleware/authMiddleware");
+
+const router = express.Router();
+
+// Get all brands for authenticated company
+router.get("/", protect, async (req, res) => {
+  try {
+    const brands = await Brand.find({ companyId: req.user.companyId });
+    res.json(brands);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Create new brand
+router.post("/", protect, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    
+    // Check if brand name already exists for company
+    const exists = await Brand.findOne({ name, companyId: req.user.companyId });
+    if (exists) {
+      return res.status(400).json({ message: "Brand with this name already exists" });
+    }
+
+    const brand = new Brand({
+      name,
+      description,
+      companyId: req.user.companyId,
+    });
+
+    const createdBrand = await brand.save();
+    res.status(201).json(createdBrand);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update brand
+router.put("/:id", protect, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    const brand = await Brand.findOne({ _id: req.params.id, companyId: req.user.companyId });
+    if (!brand) {
+      return res.status(404).json({ message: "Brand not found" });
+    }
+
+    if (name && name !== brand.name) {
+      const exists = await Brand.findOne({ name, companyId: req.user.companyId });
+      if (exists) {
+        return res.status(400).json({ message: "Brand with this name already exists" });
+      }
+    }
+
+    brand.name = name ?? brand.name;
+    brand.description = description ?? brand.description;
+
+    const updatedBrand = await brand.save();
+    res.json(updatedBrand);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Delete brand
+router.delete("/:id", protect, async (req, res) => {
+  try {
+    const brand = await Brand.findOneAndDelete({ _id: req.params.id, companyId: req.user.companyId });
+    if (!brand) {
+      return res.status(404).json({ message: "Brand not found" });
+    }
+    res.json({ message: "Brand deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+module.exports = router;

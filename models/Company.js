@@ -22,6 +22,14 @@ const companySchema = new mongoose.Schema(
       enum: ["free", "monthly", "yearly"],
       default: "free",
     },
+    subscriptionExpiresAt: {
+      type: Date,
+    },
+    status: {
+      type: String,
+      enum: ["active", "suspended"],
+      default: "active",
+    },
   },
   { timestamps: true }
 );

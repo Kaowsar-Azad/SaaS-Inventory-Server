@@ -33,6 +33,7 @@ router.post("/", protect, async (req, res) => {
     }
     
     const totalAmount = quantity * unitPrice;
+    const taxAmount = totalAmount * 0.15;
 
     const sale = new Sale({
       customerId,
@@ -40,6 +41,7 @@ router.post("/", protect, async (req, res) => {
       quantity,
       unitPrice,
       totalAmount,
+      taxAmount,
       companyId: req.user.companyId,
     });
 
