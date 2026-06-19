@@ -146,4 +146,52 @@ router.get("/transfers", protect, async (req, res) => {
   }
 });
 
+// GET warehouse stock reports
+router.get("/reports", protect, async (req, res) => {
+  try {
+    const warehouses = await Warehouse.find({ companyId: req.user.companyId });
+    const products = await Product.find({ companyId: req.user.companyId })
+      .populate("category", "name")
+      .populate("brand", "name");
+
+    const report = warehouses.map(wh => {
+      const items = [];
+      let totalStock = 0;
+      let totalValue = 0;
+
+      products.forEach(p => {
+        const whStock = p.warehouseStocks?.find(ws => ws.warehouseId?.toString() === wh._id.toString());
+        const stockQty = whStock ? whStock.stock : 0;
+        if (stockQty > 0) {
+          totalStock += stockQty;
+          totalValue += stockQty * (p.price || 0);
+          items.push({
+            _id: p._id,
+            name: p.name,
+            sku: p.sku,
+            price: p.price,
+            category: p.category?.name || "—",
+            brand: p.brand?.name || "—",
+            stock: stockQty,
+          });
+        }
+      });
+
+      return {
+        _id: wh._id,
+        name: wh.name,
+        address: wh.address,
+        totalItemsCount: items.length,
+        totalStock,
+        totalValue,
+        items,
+      };
+    });
+
+    res.json(report);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 module.exports = router;
