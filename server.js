@@ -16,6 +16,7 @@ const categoryRoutes = require("./routes/categoryRoutes");
 const brandRoutes = require("./routes/brandRoutes");
 const warehouseRoutes = require("./routes/warehouseRoutes");
 const adjustmentRoutes = require("./routes/adjustmentRoutes");
+const companyRoutes = require("./routes/companyRoutes");
 const User = require("./models/User");
 const bcrypt = require("bcryptjs");
 
@@ -55,6 +56,7 @@ app.use("/api/categories", categoryRoutes);
 app.use("/api/brands", brandRoutes);
 app.use("/api/warehouses", warehouseRoutes);
 app.use("/api/adjustments", adjustmentRoutes);
+app.use("/api/company", companyRoutes);
 
 // Database connection
 const PORT = process.env.PORT || 5000;

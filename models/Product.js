@@ -53,6 +53,10 @@ const productSchema = new mongoose.Schema(
       ref: "Company",
       required: true,
     },
+    reorderLevel: {
+      type: Number,
+      default: 10,
+    },
   },
   { timestamps: true }
 );

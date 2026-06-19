@@ -30,6 +30,18 @@ const companySchema = new mongoose.Schema(
       enum: ["active", "suspended"],
       default: "active",
     },
+    currency: {
+      type: String,
+      default: "USD",
+    },
+    taxRate: {
+      type: Number,
+      default: 15,
+    },
+    lowStockThreshold: {
+      type: Number,
+      default: 10,
+    },
   },
   { timestamps: true }
 );

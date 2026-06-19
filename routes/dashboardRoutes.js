@@ -19,20 +19,43 @@ router.get("/stats", protect, async (req, res) => {
     // 1. Total Products
     const totalProducts = await Product.countDocuments({ companyId });
 
-    // 2. Low Stock Products (stock < 10)
-    const lowStockItems = await Product.countDocuments({ companyId, stock: { $lt: 10 } });
+    // 2. Fetch Company details for threshold configuration
+    const Company = require("../models/Company");
+    const company = await Company.findById(companyId);
+    const globalThreshold = company && company.lowStockThreshold !== undefined ? company.lowStockThreshold : 10;
 
-    // 3. Total Sales Amount
+    // 3. Fetch all products to compute Stock Value and Low Stock Alerts
+    const products = await Product.find({ companyId });
+    const totalStockValue = products.reduce((sum, prod) => sum + ((prod.stock || 0) * (prod.price || 0)), 0);
+
+    const lowStockAlerts = [];
+    let lowStockCount = 0;
+
+    products.forEach(prod => {
+      // Use custom reorder level if defined, otherwise fall back to global company threshold
+      const threshold = prod.reorderLevel !== undefined ? prod.reorderLevel : globalThreshold;
+      if ((prod.stock || 0) <= threshold) {
+        lowStockCount++;
+        lowStockAlerts.push({
+          _id: prod._id,
+          name: prod.name,
+          sku: prod.sku,
+          stock: prod.stock,
+          reorderLevel: threshold,
+          suggestedReorder: Math.max(1, (threshold * 2) - prod.stock)
+        });
+      }
+    });
+
+    const lowStockItems = lowStockCount;
+
+    // 4. Total Sales Amount
     const sales = await Sale.find({ companyId });
     const totalSales = sales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
 
-    // 4. Total Purchases Amount
+    // 5. Total Purchases Amount
     const purchases = await Purchase.find({ companyId });
     const totalPurchases = purchases.reduce((sum, purchase) => sum + (purchase.totalAmount || 0), 0);
-
-    // 5. Total Stock Value
-    const products = await Product.find({ companyId });
-    const totalStockValue = products.reduce((sum, prod) => sum + ((prod.stock || 0) * (prod.price || 0)), 0);
 
     // 6. Revenue History by Days (for Chart)
     const daysQuery = Number(req.query.days) || 7;
@@ -84,7 +107,7 @@ router.get("/stats", protect, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(3);
 
-    res.json({
+     res.json({
       totalProducts,
       lowStockItems,
       totalSales,
@@ -94,6 +117,8 @@ router.get("/stats", protect, async (req, res) => {
       recentProducts,
       recentSales,
       recentPurchases,
+      lowStockAlerts,
+      currency: company && company.currency ? company.currency : "USD",
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

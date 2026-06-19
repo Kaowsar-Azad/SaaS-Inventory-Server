@@ -32,8 +32,12 @@ router.post("/", protect, async (req, res) => {
       return res.status(400).json({ message: `Insufficient stock. Only ${product.stock} left.` });
     }
     
+    const Company = require("../models/Company");
+    const company = await Company.findById(req.user.companyId);
+    const currentTaxRate = company && company.taxRate !== undefined ? company.taxRate : 15;
+
     const totalAmount = quantity * unitPrice;
-    const taxAmount = totalAmount * 0.15;
+    const taxAmount = totalAmount * (currentTaxRate / 100);
 
     const sale = new Sale({
       customerId,

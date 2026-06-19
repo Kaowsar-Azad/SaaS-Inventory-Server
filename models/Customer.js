@@ -21,6 +21,10 @@ const customerSchema = new mongoose.Schema(
       ref: "Company",
       required: true,
     },
+    notes: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true }
 );
