@@ -71,6 +71,10 @@ const connectDB = async () => {
     await mongoose.connect(mongoUri);
     console.log(`MongoDB Connected: ${mongoose.connection.host}`);
 
+    // Initialize background cron scheduler
+    const { initScheduler } = require("./lib/scheduler");
+    initScheduler();
+
     // Seed Super Admin
     const existingAdmin = await User.findOne({ role: "super_admin" });
     if (!existingAdmin) {

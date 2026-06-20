@@ -42,6 +42,34 @@ const companySchema = new mongoose.Schema(
       type: Number,
       default: 10,
     },
+    smtpHost: {
+      type: String,
+      default: "",
+    },
+    smtpPort: {
+      type: Number,
+      default: 465,
+    },
+    smtpUser: {
+      type: String,
+      default: "",
+    },
+    smtpPass: {
+      type: String,
+      default: "",
+    },
+    whatsappSid: {
+      type: String,
+      default: "",
+    },
+    whatsappToken: {
+      type: String,
+      default: "",
+    },
+    whatsappFrom: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true }
 );
