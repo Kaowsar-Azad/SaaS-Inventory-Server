@@ -1,11 +1,12 @@
 const express = require("express");
 const Product = require("../models/Product");
-const { protect } = require("../middleware/authMiddleware");
+const { protect, checkPermission } = require("../middleware/authMiddleware");
+const logActivity = require("../lib/activityLogger");
 
 const router = express.Router();
 
 // Get all products for the authenticated company
-router.get("/", protect, async (req, res) => {
+router.get("/", protect, checkPermission("products"), async (req, res) => {
   try {
     const products = await Product.find({ companyId: req.user.companyId })
       .populate("category", "name")
@@ -17,7 +18,7 @@ router.get("/", protect, async (req, res) => {
 });
 
 // Create a new product
-router.post("/", protect, async (req, res) => {
+router.post("/", protect, checkPermission("products"), async (req, res) => {
   try {
     const { name, sku, category, brand, price, stock, variants } = req.body;
 
@@ -43,6 +44,10 @@ router.post("/", protect, async (req, res) => {
     });
 
     const createdProduct = await product.save();
+    
+    // Log Activity
+    await logActivity(req, "CREATE", "products", `Created product "${name}" (SKU: ${sku})`);
+
     res.status(201).json(createdProduct);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -50,7 +55,7 @@ router.post("/", protect, async (req, res) => {
 });
 
 // Update a product
-router.put("/:id", protect, async (req, res) => {
+router.put("/:id", protect, checkPermission("products"), async (req, res) => {
   try {
     const { name, sku, category, brand, price, stock, variants } = req.body;
     const product = await Product.findOne({ _id: req.params.id, companyId: req.user.companyId });
@@ -74,6 +79,10 @@ router.put("/:id", protect, async (req, res) => {
     product.variants = variants ?? product.variants;
 
     const updatedProduct = await product.save();
+    
+    // Log Activity
+    await logActivity(req, "UPDATE", "products", `Updated product "${updatedProduct.name}" (SKU: ${updatedProduct.sku})`);
+
     res.json(updatedProduct);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -81,12 +90,16 @@ router.put("/:id", protect, async (req, res) => {
 });
 
 // Delete a product
-router.delete("/:id", protect, async (req, res) => {
+router.delete("/:id", protect, checkPermission("products"), async (req, res) => {
   try {
     const product = await Product.findOneAndDelete({ _id: req.params.id, companyId: req.user.companyId });
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
+    
+    // Log Activity
+    await logActivity(req, "DELETE", "products", `Deleted product "${product.name}" (SKU: ${product.sku})`);
+
     res.json({ message: "Product deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -94,7 +107,7 @@ router.delete("/:id", protect, async (req, res) => {
 });
 
 // Bulk create products (Excel Import)
-router.post("/bulk", protect, async (req, res) => {
+router.post("/bulk", protect, checkPermission("products"), async (req, res) => {
   try {
     const productsData = req.body;
     if (!Array.isArray(productsData)) {
@@ -138,6 +151,10 @@ router.post("/bulk", protect, async (req, res) => {
     }));
 
     const insertedProducts = await Product.insertMany(preparedProducts);
+    
+    // Log Activity
+    await logActivity(req, "BULK_IMPORT", "products", `Bulk imported ${insertedProducts.length} products`);
+
     res.status(201).json(insertedProducts);
   } catch (error) {
     res.status(500).json({ message: error.message });

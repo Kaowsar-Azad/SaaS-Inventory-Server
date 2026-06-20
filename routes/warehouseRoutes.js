@@ -2,12 +2,13 @@ const express = require("express");
 const Warehouse = require("../models/Warehouse");
 const Product = require("../models/Product");
 const WarehouseTransfer = require("../models/WarehouseTransfer");
-const { protect } = require("../middleware/authMiddleware");
+const { protect, checkPermission } = require("../middleware/authMiddleware");
+const logActivity = require("../lib/activityLogger");
 
 const router = express.Router();
 
 // GET all warehouses
-router.get("/", protect, async (req, res) => {
+router.get("/", protect, checkPermission("warehouses"), async (req, res) => {
   try {
     const warehouses = await Warehouse.find({ companyId: req.user.companyId });
     res.json(warehouses);
@@ -17,7 +18,7 @@ router.get("/", protect, async (req, res) => {
 });
 
 // CREATE new warehouse
-router.post("/", protect, async (req, res) => {
+router.post("/", protect, checkPermission("warehouses"), async (req, res) => {
   try {
     const { name, address } = req.body;
     const exists = await Warehouse.findOne({ name, companyId: req.user.companyId });
@@ -31,6 +32,10 @@ router.post("/", protect, async (req, res) => {
       companyId: req.user.companyId,
     });
     const created = await warehouse.save();
+
+    // Log Activity
+    await logActivity(req, "CREATE", "warehouses", `Created warehouse "${name}"`);
+
     res.status(201).json(created);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -38,7 +43,7 @@ router.post("/", protect, async (req, res) => {
 });
 
 // UPDATE warehouse
-router.put("/:id", protect, async (req, res) => {
+router.put("/:id", protect, checkPermission("warehouses"), async (req, res) => {
   try {
     const { name, address } = req.body;
     const warehouse = await Warehouse.findOne({ _id: req.params.id, companyId: req.user.companyId });
@@ -57,6 +62,10 @@ router.put("/:id", protect, async (req, res) => {
     warehouse.address = address ?? warehouse.address;
 
     const updated = await warehouse.save();
+
+    // Log Activity
+    await logActivity(req, "UPDATE", "warehouses", `Updated warehouse "${updated.name}"`);
+
     res.json(updated);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -64,12 +73,16 @@ router.put("/:id", protect, async (req, res) => {
 });
 
 // DELETE warehouse
-router.delete("/:id", protect, async (req, res) => {
+router.delete("/:id", protect, checkPermission("warehouses"), async (req, res) => {
   try {
     const warehouse = await Warehouse.findOneAndDelete({ _id: req.params.id, companyId: req.user.companyId });
     if (!warehouse) {
       return res.status(404).json({ message: "Warehouse not found" });
     }
+
+    // Log Activity
+    await logActivity(req, "DELETE", "warehouses", `Deleted warehouse "${warehouse.name}"`);
+
     res.json({ message: "Warehouse deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -77,7 +90,7 @@ router.delete("/:id", protect, async (req, res) => {
 });
 
 // Stock transfer between warehouses
-router.post("/transfer", protect, async (req, res) => {
+router.post("/transfer", protect, checkPermission("warehouses"), async (req, res) => {
   try {
     const { productId, quantity, fromWarehouseId, toWarehouseId } = req.body;
     
@@ -126,6 +139,18 @@ router.post("/transfer", protect, async (req, res) => {
     });
     await transfer.save();
 
+    // Fetch warehouse names for logging
+    const fromWH = await Warehouse.findById(fromWarehouseId);
+    const toWH = await Warehouse.findById(toWarehouseId);
+    
+    // Log Activity
+    await logActivity(
+      req, 
+      "TRANSFER", 
+      "warehouses", 
+      `Transferred ${quantity} units of "${product.name}" from warehouse "${fromWH ? fromWH.name : "N/A"}" to "${toWH ? toWH.name : "N/A"}"`
+    );
+
     res.json({ message: "Stock transferred successfully", product });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -133,7 +158,7 @@ router.post("/transfer", protect, async (req, res) => {
 });
 
 // GET all transfers
-router.get("/transfers", protect, async (req, res) => {
+router.get("/transfers", protect, checkPermission("warehouses"), async (req, res) => {
   try {
     const transfers = await WarehouseTransfer.find({ companyId: req.user.companyId })
       .populate("productId", "name sku")
@@ -147,7 +172,7 @@ router.get("/transfers", protect, async (req, res) => {
 });
 
 // GET warehouse stock reports
-router.get("/reports", protect, async (req, res) => {
+router.get("/reports", protect, checkPermission("warehouses"), async (req, res) => {
   try {
     const warehouses = await Warehouse.find({ companyId: req.user.companyId });
     const products = await Product.find({ companyId: req.user.companyId })

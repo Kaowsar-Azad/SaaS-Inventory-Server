@@ -1,12 +1,13 @@
 const express = require("express");
 const StockAdjustment = require("../models/StockAdjustment");
 const Product = require("../models/Product");
-const { protect } = require("../middleware/authMiddleware");
+const { protect, checkPermission } = require("../middleware/authMiddleware");
+const logActivity = require("../lib/activityLogger");
 
 const router = express.Router();
 
 // GET all adjustments
-router.get("/", protect, async (req, res) => {
+router.get("/", protect, checkPermission("adjustments"), async (req, res) => {
   try {
     const adjustments = await StockAdjustment.find({ companyId: req.user.companyId })
       .populate("productId", "name sku")
@@ -19,7 +20,7 @@ router.get("/", protect, async (req, res) => {
 });
 
 // CREATE stock adjustment / damage log
-router.post("/", protect, async (req, res) => {
+router.post("/", protect, checkPermission("adjustments"), async (req, res) => {
   try {
     const { productId, quantity, type, reason, warehouseId } = req.body;
 
@@ -78,6 +79,14 @@ router.post("/", protect, async (req, res) => {
       companyId: req.user.companyId,
     });
     const created = await adjustment.save();
+
+    // Log Activity
+    await logActivity(
+      req, 
+      type === "damage" ? "DAMAGE_LOG" : "STOCK_ADJUSTMENT", 
+      "adjustments", 
+      `Logged ${type} of ${quantity} units for product "${product.name}" (Reason: ${reason || "N/A"})`
+    );
 
     res.status(201).json(created);
   } catch (error) {

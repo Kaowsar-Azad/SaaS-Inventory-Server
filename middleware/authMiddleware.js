@@ -18,5 +18,28 @@ const protect = async (req, res, next) => {
   }
 };
 
-module.exports = { protect };
+const checkPermission = (moduleName) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Not authorized, please log in." });
+    }
+
+    // Admins and Super Admins have full access
+    if (req.user.role === "admin" || req.user.role === "super_admin") {
+      return next();
+    }
+
+    // Managers/Staff require specific module permission
+    const permissions = req.user.permissions || "";
+    const allowedModules = permissions.split(",").map(p => p.trim().toLowerCase());
+
+    if (allowedModules.includes(moduleName.toLowerCase())) {
+      return next();
+    }
+
+    res.status(403).json({ message: `Access denied. Insufficient permissions for module: ${moduleName}` });
+  };
+};
+
+module.exports = { protect, checkPermission };
 

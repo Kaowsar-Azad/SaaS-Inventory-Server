@@ -1,11 +1,12 @@
 const express = require("express");
 const Category = require("../models/Category");
-const { protect } = require("../middleware/authMiddleware");
+const { protect, checkPermission } = require("../middleware/authMiddleware");
+const logActivity = require("../lib/activityLogger");
 
 const router = express.Router();
 
 // Get all categories for authenticated company
-router.get("/", protect, async (req, res) => {
+router.get("/", protect, checkPermission("products"), async (req, res) => {
   try {
     const categories = await Category.find({ companyId: req.user.companyId });
     res.json(categories);
@@ -15,7 +16,7 @@ router.get("/", protect, async (req, res) => {
 });
 
 // Create new category
-router.post("/", protect, async (req, res) => {
+router.post("/", protect, checkPermission("products"), async (req, res) => {
   try {
     const { name, description } = req.body;
     
@@ -32,6 +33,10 @@ router.post("/", protect, async (req, res) => {
     });
 
     const createdCategory = await category.save();
+
+    // Log Activity
+    await logActivity(req, "CREATE", "categories", `Created category "${name}"`);
+
     res.status(201).json(createdCategory);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -39,7 +44,7 @@ router.post("/", protect, async (req, res) => {
 });
 
 // Update category
-router.put("/:id", protect, async (req, res) => {
+router.put("/:id", protect, checkPermission("products"), async (req, res) => {
   try {
     const { name, description } = req.body;
     const category = await Category.findOne({ _id: req.params.id, companyId: req.user.companyId });
@@ -58,6 +63,10 @@ router.put("/:id", protect, async (req, res) => {
     category.description = description ?? category.description;
 
     const updatedCategory = await category.save();
+
+    // Log Activity
+    await logActivity(req, "UPDATE", "categories", `Updated category "${updatedCategory.name}"`);
+
     res.json(updatedCategory);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -65,12 +74,16 @@ router.put("/:id", protect, async (req, res) => {
 });
 
 // Delete category
-router.delete("/:id", protect, async (req, res) => {
+router.delete("/:id", protect, checkPermission("products"), async (req, res) => {
   try {
     const category = await Category.findOneAndDelete({ _id: req.params.id, companyId: req.user.companyId });
     if (!category) {
       return res.status(404).json({ message: "Category not found" });
     }
+
+    // Log Activity
+    await logActivity(req, "DELETE", "categories", `Deleted category "${category.name}"`);
+
     res.json({ message: "Category deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });

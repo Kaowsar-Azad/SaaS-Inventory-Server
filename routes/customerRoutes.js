@@ -1,11 +1,12 @@
 const express = require("express");
 const Customer = require("../models/Customer");
-const { protect } = require("../middleware/authMiddleware");
+const { protect, checkPermission } = require("../middleware/authMiddleware");
+const logActivity = require("../lib/activityLogger");
 
 const router = express.Router();
 
 // Get all customers for company
-router.get("/", protect, async (req, res) => {
+router.get("/", protect, checkPermission("customers"), async (req, res) => {
   try {
     const customers = await Customer.find({ companyId: req.user.companyId });
     res.json(customers);
@@ -15,7 +16,7 @@ router.get("/", protect, async (req, res) => {
 });
 
 // Create new customer
-router.post("/", protect, async (req, res) => {
+router.post("/", protect, checkPermission("customers"), async (req, res) => {
   try {
     const { name, email, phone, address } = req.body;
     const customer = new Customer({
@@ -26,6 +27,10 @@ router.post("/", protect, async (req, res) => {
       companyId: req.user.companyId,
     });
     const createdCustomer = await customer.save();
+
+    // Log Activity
+    await logActivity(req, "CREATE", "customers", `Created customer profile for "${name}"`);
+
     res.status(201).json(createdCustomer);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -33,7 +38,7 @@ router.post("/", protect, async (req, res) => {
 });
 
 // Update a customer
-router.put("/:id", protect, async (req, res) => {
+router.put("/:id", protect, checkPermission("customers"), async (req, res) => {
   try {
     const { name, email, phone, address, notes } = req.body;
     const customer = await Customer.findOne({ _id: req.params.id, companyId: req.user.companyId });
@@ -48,6 +53,10 @@ router.put("/:id", protect, async (req, res) => {
     customer.notes = notes ?? customer.notes;
 
     const updatedCustomer = await customer.save();
+
+    // Log Activity
+    await logActivity(req, "UPDATE", "customers", `Updated customer profile for "${updatedCustomer.name}"`);
+
     res.json(updatedCustomer);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -55,7 +64,7 @@ router.put("/:id", protect, async (req, res) => {
 });
 
 // Get customer's sales history (Customer Purchase History)
-router.get("/:id/purchases", protect, async (req, res) => {
+router.get("/:id/purchases", protect, checkPermission("customers"), async (req, res) => {
   try {
     const Sale = require("../models/Sale");
     const purchases = await Sale.find({
@@ -72,12 +81,16 @@ router.get("/:id/purchases", protect, async (req, res) => {
 });
 
 // Delete a customer
-router.delete("/:id", protect, async (req, res) => {
+router.delete("/:id", protect, checkPermission("customers"), async (req, res) => {
   try {
     const customer = await Customer.findOneAndDelete({ _id: req.params.id, companyId: req.user.companyId });
     if (!customer) {
       return res.status(404).json({ message: "Customer not found" });
     }
+
+    // Log Activity
+    await logActivity(req, "DELETE", "customers", `Deleted customer profile of "${customer.name}"`);
+
     res.json({ message: "Customer deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });

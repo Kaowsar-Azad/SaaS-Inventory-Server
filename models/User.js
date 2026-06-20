@@ -22,6 +22,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "admin", // super_admin, admin, manager, staff
     },
+    permissions: {
+      type: String,
+      default: "",
+    },
     companyName: {
       type: String,
     },

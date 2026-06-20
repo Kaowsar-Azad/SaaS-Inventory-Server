@@ -1,13 +1,14 @@
 const express = require("express");
 const Company = require("../models/Company");
-const { protect } = require("../middleware/authMiddleware");
+const { protect, checkPermission } = require("../middleware/authMiddleware");
+const logActivity = require("../lib/activityLogger");
 
 const router = express.Router();
 
 // @desc    Get company settings
 // @route   GET /api/company/settings
 // @access  Private
-router.get("/settings", protect, async (req, res) => {
+router.get("/settings", protect, checkPermission("settings"), async (req, res) => {
   try {
     const company = await Company.findById(req.user.companyId);
     if (!company) {
@@ -33,7 +34,7 @@ router.get("/settings", protect, async (req, res) => {
 // @desc    Update company settings
 // @route   PUT /api/company/settings
 // @access  Private
-router.put("/settings", protect, async (req, res) => {
+router.put("/settings", protect, checkPermission("settings"), async (req, res) => {
   try {
     const company = await Company.findById(req.user.companyId);
     if (!company) {
@@ -51,6 +52,9 @@ router.put("/settings", protect, async (req, res) => {
     company.lowStockThreshold = lowStockThreshold !== undefined ? Number(lowStockThreshold) : company.lowStockThreshold;
 
     const updatedCompany = await company.save();
+
+    // Log Activity
+    await logActivity(req, "UPDATE", "settings", `Updated company settings`);
 
     res.json({
       name: updatedCompany.name,

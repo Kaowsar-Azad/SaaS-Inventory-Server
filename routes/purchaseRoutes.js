@@ -1,12 +1,13 @@
 const express = require("express");
 const Purchase = require("../models/Purchase");
 const Product = require("../models/Product");
-const { protect } = require("../middleware/authMiddleware");
+const { protect, checkPermission } = require("../middleware/authMiddleware");
+const logActivity = require("../lib/activityLogger");
 
 const router = express.Router();
 
 // Get all purchases for company
-router.get("/", protect, async (req, res) => {
+router.get("/", protect, checkPermission("purchases"), async (req, res) => {
   try {
     const purchases = await Purchase.find({ companyId: req.user.companyId })
       .populate("supplierId", "name")
@@ -18,7 +19,7 @@ router.get("/", protect, async (req, res) => {
 });
 
 // Create new purchase (Stock In)
-router.post("/", protect, async (req, res) => {
+router.post("/", protect, checkPermission("purchases"), async (req, res) => {
   try {
     const { supplierId, productId, quantity, unitPrice } = req.body;
     
@@ -36,9 +37,17 @@ router.post("/", protect, async (req, res) => {
     const createdPurchase = await purchase.save();
 
     // Increase product stock
-    await Product.findByIdAndUpdate(productId, {
+    const productObj = await Product.findByIdAndUpdate(productId, {
       $inc: { stock: quantity }
-    });
+    }, { new: true });
+
+    // Log Activity
+    await logActivity(
+      req, 
+      "CREATE", 
+      "purchases", 
+      `Recorded purchase of ${quantity} units of "${productObj ? productObj.name : "Product"}" (Cost: $${totalAmount})`
+    );
 
     res.status(201).json(createdPurchase);
   } catch (error) {

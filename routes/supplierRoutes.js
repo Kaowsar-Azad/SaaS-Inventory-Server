@@ -1,11 +1,12 @@
 const express = require("express");
 const Supplier = require("../models/Supplier");
-const { protect } = require("../middleware/authMiddleware");
+const { protect, checkPermission } = require("../middleware/authMiddleware");
+const logActivity = require("../lib/activityLogger");
 
 const router = express.Router();
 
 // Get all suppliers for company
-router.get("/", protect, async (req, res) => {
+router.get("/", protect, checkPermission("suppliers"), async (req, res) => {
   try {
     const suppliers = await Supplier.find({ companyId: req.user.companyId });
     res.json(suppliers);
@@ -15,7 +16,7 @@ router.get("/", protect, async (req, res) => {
 });
 
 // Create new supplier
-router.post("/", protect, async (req, res) => {
+router.post("/", protect, checkPermission("suppliers"), async (req, res) => {
   try {
     const { name, email, phone, address } = req.body;
     const supplier = new Supplier({
@@ -26,6 +27,10 @@ router.post("/", protect, async (req, res) => {
       companyId: req.user.companyId,
     });
     const createdSupplier = await supplier.save();
+
+    // Log Activity
+    await logActivity(req, "CREATE", "suppliers", `Created supplier "${name}"`);
+
     res.status(201).json(createdSupplier);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -33,7 +38,7 @@ router.post("/", protect, async (req, res) => {
 });
 
 // Update a supplier
-router.put("/:id", protect, async (req, res) => {
+router.put("/:id", protect, checkPermission("suppliers"), async (req, res) => {
   try {
     const { name, email, phone, address } = req.body;
     const supplier = await Supplier.findOne({ _id: req.params.id, companyId: req.user.companyId });
@@ -47,6 +52,10 @@ router.put("/:id", protect, async (req, res) => {
     supplier.address = address ?? supplier.address;
 
     const updatedSupplier = await supplier.save();
+
+    // Log Activity
+    await logActivity(req, "UPDATE", "suppliers", `Updated supplier "${updatedSupplier.name}"`);
+
     res.json(updatedSupplier);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -54,12 +63,16 @@ router.put("/:id", protect, async (req, res) => {
 });
 
 // Delete a supplier
-router.delete("/:id", protect, async (req, res) => {
+router.delete("/:id", protect, checkPermission("suppliers"), async (req, res) => {
   try {
     const supplier = await Supplier.findOneAndDelete({ _id: req.params.id, companyId: req.user.companyId });
     if (!supplier) {
       return res.status(404).json({ message: "Supplier not found" });
     }
+
+    // Log Activity
+    await logActivity(req, "DELETE", "suppliers", `Deleted supplier "${supplier.name}"`);
+
     res.json({ message: "Supplier deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
