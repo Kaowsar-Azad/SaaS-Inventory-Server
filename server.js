@@ -18,6 +18,7 @@ const warehouseRoutes = require("./routes/warehouseRoutes");
 const adjustmentRoutes = require("./routes/adjustmentRoutes");
 const companyRoutes = require("./routes/companyRoutes");
 const activityRoutes = require("./routes/activityRoutes");
+const stripePaymentRoutes = require("./routes/stripePaymentRoutes");
 const User = require("./models/User");
 const bcrypt = require("bcryptjs");
 
@@ -29,6 +30,9 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 }));
+
+// Stripe webhook needs raw body for signature verification
+app.use("/api/payments/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
 
 // Better Auth Route Handler
@@ -59,6 +63,7 @@ app.use("/api/warehouses", warehouseRoutes);
 app.use("/api/adjustments", adjustmentRoutes);
 app.use("/api/company", companyRoutes);
 app.use("/api/activities", activityRoutes);
+app.use("/api/payments", stripePaymentRoutes);
 
 // Database connection
 const PORT = process.env.PORT || 5000;
@@ -73,7 +78,9 @@ const connectDB = async () => {
 
     // Initialize background cron scheduler
     const { initScheduler } = require("./lib/scheduler");
+    const { initAllFreeClientsOnStartup } = require("./lib/whatsappService");
     initScheduler();
+    initAllFreeClientsOnStartup();
 
     // Seed Super Admin
     const existingAdmin = await User.findOne({ role: "super_admin" });

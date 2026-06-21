@@ -25,6 +25,14 @@ const companySchema = new mongoose.Schema(
     subscriptionExpiresAt: {
       type: Date,
     },
+    stripeCustomerId: {
+      type: String,
+      default: "",
+    },
+    stripeSubscriptionId: {
+      type: String,
+      default: "",
+    },
     status: {
       type: String,
       enum: ["active", "suspended"],
@@ -69,6 +77,16 @@ const companySchema = new mongoose.Schema(
     whatsappFrom: {
       type: String,
       default: "",
+    },
+    whatsappMethod: {
+      type: String,
+      enum: ["twilio", "free"],
+      default: "twilio",
+    },
+    whatsappStatus: {
+      type: String,
+      enum: ["disconnected", "connected"],
+      default: "disconnected",
     },
   },
   { timestamps: true }

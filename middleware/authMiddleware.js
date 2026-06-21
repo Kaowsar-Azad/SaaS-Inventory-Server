@@ -12,6 +12,45 @@ const protect = async (req, res, next) => {
     }
 
     req.user = session.user;
+
+    // Check company subscription status
+    if (req.user.companyId) {
+      const Company = require("../models/Company");
+      const company = await Company.findById(req.user.companyId);
+
+      if (company) {
+        const now = new Date();
+        const isSubscriptionExpired =
+          company.subscriptionPlan !== "free" &&
+          company.subscriptionExpiresAt &&
+          new Date(company.subscriptionExpiresAt) < now;
+
+        if (isSubscriptionExpired) {
+          // Auto suspend on expiration
+          if (company.status !== "suspended") {
+            company.status = "suspended";
+            await company.save();
+          }
+        }
+
+        if (company.status === "suspended") {
+          // Allow payment routes, company settings (so they can read status and pay) and auth routes
+          const isBypass =
+            req.originalUrl.includes("/api/payments") ||
+            req.originalUrl.includes("/api/company/settings") ||
+            req.originalUrl.includes("/api/auth");
+
+          if (!isBypass) {
+            return res.status(402).json({
+              message: "Subscription Expired or Suspended. Please complete payment to renew access.",
+              code: "SUBSCRIPTION_EXPIRED",
+              companyName: company.name
+            });
+          }
+        }
+      }
+    }
+
     next();
   } catch (error) {
     res.status(401).json({ message: "Not authorized, session verification failed", error: error.message });
