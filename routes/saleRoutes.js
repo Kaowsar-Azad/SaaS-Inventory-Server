@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const Sale = require("../models/Sale");
 const Product = require("../models/Product");
 const { protect, checkPermission } = require("../middleware/authMiddleware");
@@ -122,6 +123,141 @@ router.post("/", protect, checkPermission("sales"), async (req, res) => {
     res.status(201).json(createdSale);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+// Create bulk sales from POS checkout
+router.post("/bulk", protect, checkPermission("sales"), async (req, res) => {
+  try {
+    const { customerId, items, amountPaid, paymentMethod } = req.body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: "No items provided for sale." });
+    }
+
+    const Company = require("../models/Company");
+    const company = await Company.findById(req.user.companyId);
+    const currentTaxRate = company && company.taxRate !== undefined ? company.taxRate : 15;
+
+    // Validate stock and calculate totals first
+    const checkedItems = [];
+    let overallSubtotal = 0;
+
+    for (const item of items) {
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        throw new Error(`Product not found with ID: ${item.productId}`);
+      }
+
+      if (product.stock < item.quantity) {
+        throw new Error(`Insufficient stock for "${product.name}". Available: ${product.stock}`);
+      }
+
+      const totalAmount = item.quantity * item.unitPrice;
+      const taxAmount = totalAmount * (currentTaxRate / 100);
+      const grandTotal = totalAmount + taxAmount;
+
+      overallSubtotal += totalAmount;
+
+      checkedItems.push({
+        product,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalAmount,
+        taxAmount,
+        grandTotal
+      });
+    }
+
+    const amountPaidNum = Number(amountPaid || 0);
+    let remainingPaidPool = amountPaidNum;
+    const createdSales = [];
+
+    // Create Sale documents and update stock
+    for (const item of checkedItems) {
+      // Pro-rate payment to this item
+      let itemPaid = 0;
+      if (remainingPaidPool >= item.grandTotal) {
+        itemPaid = item.grandTotal;
+        remainingPaidPool -= item.grandTotal;
+      } else {
+        itemPaid = remainingPaidPool;
+        remainingPaidPool = 0;
+      }
+
+      const itemDue = Math.max(0, item.grandTotal - itemPaid);
+      let paymentStatus = "paid";
+      if (itemPaid === 0) paymentStatus = "due";
+      else if (itemDue > 0) paymentStatus = "partial";
+
+      const sale = new Sale({
+        customerId,
+        productId: item.product._id,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalAmount: item.totalAmount,
+        taxAmount: item.taxAmount,
+        amountPaid: itemPaid,
+        amountDue: itemDue,
+        paymentStatus,
+        companyId: req.user.companyId,
+      });
+
+      const savedSale = await sale.save();
+      createdSales.push(savedSale);
+
+      if (itemPaid > 0) {
+        const DuePayment = require("../models/DuePayment");
+        await DuePayment.create({
+          saleId: savedSale._id,
+          companyId: req.user.companyId,
+          amountPaid: itemPaid,
+          paymentMethod: paymentMethod || "cash",
+          note: "POS bulk checkout payment",
+        });
+      }
+
+      // Decrement product stock
+      const productObj = await Product.findByIdAndUpdate(item.product._id, {
+        $inc: { stock: -item.quantity }
+      }, { new: true });
+
+      // Trigger low stock notifications if applicable
+      if (productObj && productObj.stock <= productObj.reorderLevel) {
+        if (process.env.SMTP_USER) {
+          const { sendEmail } = require("../lib/emailService");
+          const warningHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #fecaca; border-radius: 12px; background-color: #fff5f5;">
+              <h2 style="color: #dc2626; border-bottom: 2px solid #f87171; padding-bottom: 10px; margin-top: 0;">⚠️ Low Stock Alert</h2>
+              <p style="color: #4b5563; font-size: 14px;">The following item has dropped below its reorder threshold during a sale transaction:</p>
+              <p style="font-size: 16px; margin: 5px 0;"><strong>Product Name:</strong> ${productObj.name}</p>
+              <p style="font-size: 14px; margin: 5px 0;"><strong>SKU:</strong> ${productObj.sku}</p>
+              <p style="font-size: 16px; color: #dc2626; margin: 15px 0; font-weight: bold;">
+                Current Stock: ${productObj.stock} (Threshold Limit: ${productObj.reorderLevel})
+              </p>
+            </div>
+          `;
+          sendEmail({
+            to: process.env.SMTP_USER,
+            subject: `⚠️ Low Stock Alert: ${productObj.name} is running low`,
+            html: warningHtml,
+            companyId: req.user.companyId
+          }).catch(err => console.error("Async bulk low stock email notification failed:", err));
+        }
+      }
+    }
+
+    // Log Activity for all items
+    await logActivity(
+      req,
+      "CREATE",
+      "sales",
+      `Recorded POS bulk sale of ${items.length} items (Total Revenue: $${overallSubtotal})`
+    );
+
+    res.status(201).json({ sales: createdSales, message: "POS checkout recorded successfully." });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
   }
 });
 

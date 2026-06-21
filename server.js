@@ -19,6 +19,7 @@ const adjustmentRoutes = require("./routes/adjustmentRoutes");
 const companyRoutes = require("./routes/companyRoutes");
 const activityRoutes = require("./routes/activityRoutes");
 const stripePaymentRoutes = require("./routes/stripePaymentRoutes");
+const returnRoutes = require("./routes/returnRoutes");
 const User = require("./models/User");
 const bcrypt = require("bcryptjs");
 
@@ -64,6 +65,7 @@ app.use("/api/adjustments", adjustmentRoutes);
 app.use("/api/company", companyRoutes);
 app.use("/api/activities", activityRoutes);
 app.use("/api/payments", stripePaymentRoutes);
+app.use("/api/returns", returnRoutes);
 
 // Database connection
 const PORT = process.env.PORT || 5000;
