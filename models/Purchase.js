@@ -25,6 +25,19 @@ const purchaseSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    amountPaid: {
+      type: Number,
+      default: 0,
+    },
+    amountDue: {
+      type: Number,
+      default: 0,
+    },
+    paymentStatus: {
+      type: String,
+      enum: ["paid", "partial", "due"],
+      default: "paid",
+    },
     status: {
       type: String,
       enum: ["pending", "completed"],

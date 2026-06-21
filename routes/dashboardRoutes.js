@@ -107,7 +107,7 @@ router.get("/stats", protect, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(3);
 
-     res.json({
+    res.json({
       totalProducts,
       lowStockItems,
       totalSales,
@@ -119,6 +119,85 @@ router.get("/stats", protect, async (req, res) => {
       recentPurchases,
       lowStockAlerts,
       currency: company && company.currency ? company.currency : "USD",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get dues summary (receivables and payables) for the logged-in user's company
+router.get("/dues-summary", protect, async (req, res) => {
+  try {
+    const companyId = req.user.companyId;
+    if (!companyId) {
+      return res.status(400).json({ message: "No company associated with this account" });
+    }
+
+    // 1. Fetch sales with outstanding dues
+    const salesWithDues = await Sale.find({ companyId, amountDue: { $gt: 0 } })
+      .populate("customerId", "name phone email")
+      .populate("productId", "name sku")
+      .sort({ createdAt: -1 });
+
+    const totalCustomerDue = salesWithDues.reduce((sum, sale) => sum + (sale.amountDue || 0), 0);
+
+    // 2. Fetch purchases with outstanding dues
+    const purchasesWithDues = await Purchase.find({ companyId, amountDue: { $gt: 0 } })
+      .populate("supplierId", "name phone email")
+      .populate("productId", "name sku")
+      .sort({ createdAt: -1 });
+
+    const totalSupplierDue = purchasesWithDues.reduce((sum, purchase) => sum + (purchase.amountDue || 0), 0);
+
+    // 3. Group dues by Customer for summary view
+    const customerDuesMap = {};
+    salesWithDues.forEach(sale => {
+      const customer = sale.customerId;
+      if (!customer) return;
+      const cid = customer._id.toString();
+      if (!customerDuesMap[cid]) {
+        customerDuesMap[cid] = {
+          customerId: cid,
+          name: customer.name,
+          phone: customer.phone,
+          email: customer.email,
+          totalDue: 0,
+          salesCount: 0
+        };
+      }
+      customerDuesMap[cid].totalDue += sale.amountDue;
+      customerDuesMap[cid].salesCount += 1;
+    });
+    const customerDues = Object.values(customerDuesMap).sort((a, b) => b.totalDue - a.totalDue);
+
+    // 4. Group dues by Supplier for summary view
+    const supplierDuesMap = {};
+    purchasesWithDues.forEach(purchase => {
+      const supplier = purchase.supplierId;
+      if (!supplier) return;
+      const sid = supplier._id.toString();
+      if (!supplierDuesMap[sid]) {
+        supplierDuesMap[sid] = {
+          supplierId: sid,
+          name: supplier.name,
+          phone: supplier.phone,
+          email: supplier.email,
+          totalDue: 0,
+          purchasesCount: 0
+        };
+      }
+      supplierDuesMap[sid].totalDue += purchase.amountDue;
+      supplierDuesMap[sid].purchasesCount += 1;
+    });
+    const supplierDues = Object.values(supplierDuesMap).sort((a, b) => b.totalDue - a.totalDue);
+
+    res.json({
+      totalCustomerDue,
+      totalSupplierDue,
+      customerDues,
+      supplierDues,
+      salesWithDues,
+      purchasesWithDues
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

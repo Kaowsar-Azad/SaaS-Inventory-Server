@@ -21,7 +21,7 @@ router.get("/", protect, checkPermission("sales"), async (req, res) => {
 // Create new sale (Stock Out)
 router.post("/", protect, checkPermission("sales"), async (req, res) => {
   try {
-    const { customerId, productId, quantity, unitPrice } = req.body;
+    const { customerId, productId, quantity, unitPrice, amountPaid, paymentMethod } = req.body;
 
     // Check if sufficient stock is available
     const product = await Product.findById(productId);
@@ -39,6 +39,12 @@ router.post("/", protect, checkPermission("sales"), async (req, res) => {
 
     const totalAmount = quantity * unitPrice;
     const taxAmount = totalAmount * (currentTaxRate / 100);
+    const grandTotal = totalAmount + taxAmount;
+    const amountPaidNum = Number(amountPaid || 0);
+    const amountDue = Math.max(0, grandTotal - amountPaidNum);
+    let paymentStatus = "paid";
+    if (amountPaidNum === 0) paymentStatus = "due";
+    else if (amountDue > 0) paymentStatus = "partial";
 
     const sale = new Sale({
       customerId,
@@ -47,10 +53,24 @@ router.post("/", protect, checkPermission("sales"), async (req, res) => {
       unitPrice,
       totalAmount,
       taxAmount,
+      amountPaid: amountPaidNum,
+      amountDue,
+      paymentStatus,
       companyId: req.user.companyId,
     });
 
     const createdSale = await sale.save();
+
+    if (amountPaidNum > 0) {
+      const DuePayment = require("../models/DuePayment");
+      await DuePayment.create({
+        saleId: createdSale._id,
+        companyId: req.user.companyId,
+        amountPaid: amountPaidNum,
+        paymentMethod: paymentMethod || "cash",
+        note: "Initial payment during sale creation",
+      });
+    }
 
     // Decrease product stock
     const productObj = await Product.findByIdAndUpdate(productId, {
@@ -100,6 +120,68 @@ router.post("/", protect, checkPermission("sales"), async (req, res) => {
     );
 
     res.status(201).json(createdSale);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Add payment for a sale due
+router.post("/:id/payments", protect, checkPermission("sales"), async (req, res) => {
+  try {
+    const { amountPaid, paymentMethod, note } = req.body;
+    const sale = await Sale.findById(req.params.id);
+    if (!sale) {
+      return res.status(404).json({ message: "Sale not found" });
+    }
+
+    const payAmount = Number(amountPaid);
+    if (isNaN(payAmount) || payAmount <= 0) {
+      return res.status(400).json({ message: "Invalid payment amount" });
+    }
+
+    if (payAmount > sale.amountDue) {
+      return res.status(400).json({ message: `Payment amount $${payAmount} exceeds outstanding due of $${sale.amountDue}` });
+    }
+
+    const DuePayment = require("../models/DuePayment");
+    const payment = new DuePayment({
+      saleId: sale._id,
+      companyId: req.user.companyId,
+      amountPaid: payAmount,
+      paymentMethod,
+      note: note || "",
+    });
+    await payment.save();
+
+    sale.amountPaid += payAmount;
+    sale.amountDue = Math.max(0, sale.amountDue - payAmount);
+    if (sale.amountDue === 0) {
+      sale.paymentStatus = "paid";
+    } else {
+      sale.paymentStatus = "partial";
+    }
+    await sale.save();
+
+    // Log Activity
+    await logActivity(
+      req,
+      "UPDATE",
+      "sales",
+      `Recorded due payment of $${payAmount} for sale ID ${sale._id}`
+    );
+
+    res.json({ sale, payment });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get payments for a sale
+router.get("/:id/payments", protect, checkPermission("sales"), async (req, res) => {
+  try {
+    const DuePayment = require("../models/DuePayment");
+    const payments = await DuePayment.find({ saleId: req.params.id, companyId: req.user.companyId }).sort({ createdAt: -1 });
+    res.json(payments);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
