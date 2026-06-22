@@ -98,7 +98,7 @@ const protect = async (req, res, next) => {
     // --------------------------------------------------
     // পদ্ধতি ২: কুকি সেশন ভেরিফিকেশন (ডিফল্ট পদ্ধতি)
     // --------------------------------------------------
-    const authInstance = getAuth();
+    const authInstance = await getAuth();
     const session = await authInstance.api.getSession({
       headers: req.headers
     });

@@ -55,9 +55,9 @@ app.use(async (req, res, next) => {
 const { toNodeHandler } = require("better-auth/node");
 const { getAuth } = require("./lib/auth");
 
-app.use("/api/auth", (req, res, next) => {
+app.use("/api/auth", async (req, res, next) => {
   try {
-    const authInstance = getAuth();
+    const authInstance = await getAuth();
     return toNodeHandler(authInstance)(req, res, next);
   } catch (err) {
     next(err);
@@ -100,7 +100,7 @@ const connectDB = async () => {
     // Seed Super Admin
     const existingAdmin = await User.findOne({ role: "super_admin" });
     if (!existingAdmin) {
-      const authInstance = getAuth();
+      const authInstance = await getAuth();
       await authInstance.api.signUpEmail({
         body: {
           email: "admin@saas.com",

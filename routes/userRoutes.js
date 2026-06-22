@@ -38,7 +38,7 @@ router.post("/", protect, async (req, res) => {
       return res.status(400).json({ message: "Invalid role specified" });
     }
 
-    const authInstance = getAuth();
+    const authInstance = await getAuth();
 
     // Use Better Auth programmatic signup to write to both user & account collections
     const authResult = await authInstance.api.signUpEmail({
