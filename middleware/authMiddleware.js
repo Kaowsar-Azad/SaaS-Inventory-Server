@@ -1,5 +1,6 @@
 const { getAuth } = require("../lib/auth");
 const { jwtVerify, createRemoteJWKSet } = require("jose");
+const Company = require("../models/Company");
 
 // JWKS পাবলিক কি-সেটের URL — Better Auth স্বয়ংক্রিয়ভাবে এই এন্ডপয়েন্ট তৈরি করে
 const JWKS_URL = new URL(
@@ -8,6 +9,44 @@ const JWKS_URL = new URL(
 
 // createRemoteJWKSet কল করে JWKS রিমোট থেকে পাবলিক কি রিড করার ফাংশন তৈরি করা হচ্ছে
 const JWKS = createRemoteJWKSet(JWKS_URL);
+
+/**
+ * Handle subscription check to avoid code duplication
+ * Returns true if valid, returns false and sends res if blocked.
+ */
+const handleSubscriptionCheck = async (req, res, companyId) => {
+  const company = await Company.findById(companyId);
+
+  if (company) {
+    const now = new Date();
+    const isSubscriptionExpired =
+      company.subscriptionPlan !== "free" &&
+      company.subscriptionExpiresAt &&
+      new Date(company.subscriptionExpiresAt) < now;
+
+    if (isSubscriptionExpired && company.status !== "suspended") {
+      company.status = "suspended";
+      await company.save();
+    }
+
+    if (company.status === "suspended") {
+      const isBypass =
+        req.originalUrl.includes("/api/payments") ||
+        req.originalUrl.includes("/api/company/settings") ||
+        req.originalUrl.includes("/api/auth");
+
+      if (!isBypass) {
+        res.status(402).json({
+          message: "Subscription Expired or Suspended. Please complete payment to renew access.",
+          code: "SUBSCRIPTION_EXPIRED",
+          companyName: company.name
+        });
+        return false;
+      }
+    }
+  }
+  return true;
+};
 
 /**
  * protect মিডলওয়্যার — দুইভাবে অথেন্টিকেশন সাপোর্ট করে:
@@ -37,36 +76,13 @@ const protect = async (req, res, next) => {
           role: payload.role,
           companyId: payload.companyId,
           companyName: payload.companyName,
+          permissions: payload.permissions,
         };
 
-        // সাবস্ক্রিপশন চেক (জেডাব্লিউটি পাথেও একই লজিক প্রযোজ্য)
+        // সাবস্ক্রিপশন চেক
         if (req.user.companyId) {
-          const Company = require("../models/Company");
-          const company = await Company.findById(req.user.companyId);
-          if (company) {
-            const now = new Date();
-            const isSubscriptionExpired =
-              company.subscriptionPlan !== "free" &&
-              company.subscriptionExpiresAt &&
-              new Date(company.subscriptionExpiresAt) < now;
-            if (isSubscriptionExpired && company.status !== "suspended") {
-              company.status = "suspended";
-              await company.save();
-            }
-            if (company.status === "suspended") {
-              const isBypass =
-                req.originalUrl.includes("/api/payments") ||
-                req.originalUrl.includes("/api/company/settings") ||
-                req.originalUrl.includes("/api/auth");
-              if (!isBypass) {
-                return res.status(402).json({
-                  message: "Subscription Expired or Suspended. Please complete payment to renew access.",
-                  code: "SUBSCRIPTION_EXPIRED",
-                  companyName: company.name,
-                });
-              }
-            }
-          }
+          const isValid = await handleSubscriptionCheck(req, res, req.user.companyId);
+          if (!isValid) return; 
         }
 
         return next();
@@ -95,38 +111,8 @@ const protect = async (req, res, next) => {
 
     // সাবস্ক্রিপশন স্ট্যাটাস চেক
     if (req.user.companyId) {
-      const Company = require("../models/Company");
-      const company = await Company.findById(req.user.companyId);
-
-      if (company) {
-        const now = new Date();
-        const isSubscriptionExpired =
-          company.subscriptionPlan !== "free" &&
-          company.subscriptionExpiresAt &&
-          new Date(company.subscriptionExpiresAt) < now;
-
-        if (isSubscriptionExpired) {
-          if (company.status !== "suspended") {
-            company.status = "suspended";
-            await company.save();
-          }
-        }
-
-        if (company.status === "suspended") {
-          const isBypass =
-            req.originalUrl.includes("/api/payments") ||
-            req.originalUrl.includes("/api/company/settings") ||
-            req.originalUrl.includes("/api/auth");
-
-          if (!isBypass) {
-            return res.status(402).json({
-              message: "Subscription Expired or Suspended. Please complete payment to renew access.",
-              code: "SUBSCRIPTION_EXPIRED",
-              companyName: company.name
-            });
-          }
-        }
-      }
+      const isValid = await handleSubscriptionCheck(req, res, req.user.companyId);
+      if (!isValid) return; 
     }
 
     next();

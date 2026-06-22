@@ -99,10 +99,26 @@ const connectDB = async () => {
       console.log("Super Admin Seeded: admin@saas.com / admin123");
     }
     
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    if (process.env.NODE_ENV !== "production") {
+      app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    }
   } catch (err) {
     console.error("Failed to connect to MongoDB", err);
   }
 };
 
-connectDB();
+if (process.env.NODE_ENV !== "production") {
+  connectDB();
+} else {
+  // For Vercel production serverless mode, connect to database immediately when imported
+  mongoose.connect(process.env.MONGODB_URI)
+    .then(() => {
+      console.log("MongoDB Connected for Vercel Serverless");
+      // Initialize background cron scheduler
+      const { initScheduler } = require("./lib/scheduler");
+      initScheduler();
+    })
+    .catch(err => console.error("Failed to connect to MongoDB", err));
+}
+
+module.exports = app;
