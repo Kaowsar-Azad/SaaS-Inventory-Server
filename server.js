@@ -92,6 +92,16 @@ app.use("/api/activities", activityRoutes);
 app.use("/api/payments", stripePaymentRoutes);
 app.use("/api/returns", returnRoutes);
 
+// Root Welcome Route
+app.get("/", (req, res) => {
+  res.json({
+    status: "success",
+    message: "SaaS Inventory Server API is running successfully!",
+    version: "1.0.0",
+    database: mongoose.connection.readyState === 1 ? "connected" : "connecting/disconnected"
+  });
+});
+
 // Database connection
 const PORT = process.env.PORT || 5000;
 
