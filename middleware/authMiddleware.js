@@ -1,14 +1,20 @@
 const { getAuth } = require("../lib/auth");
-const { jwtVerify, createRemoteJWKSet } = require("jose");
 const Company = require("../models/Company");
 
-// JWKS পাবলিক কি-সেটের URL — Better Auth স্বয়ংক্রিয়ভাবে এই এন্ডপয়েন্ট তৈরি করে
-const JWKS_URL = new URL(
-  `${process.env.BETTER_AUTH_URL || "http://localhost:5000"}/api/auth/jwks`
-);
+let JWKS = null;
+let jwtVerifyFn = null;
 
-// createRemoteJWKSet কল করে JWKS রিমোট থেকে পাবলিক কি রিড করার ফাংশন তৈরি করা হচ্ছে
-const JWKS = createRemoteJWKSet(JWKS_URL);
+const getJWKS = async () => {
+  if (!JWKS) {
+    const { createRemoteJWKSet, jwtVerify } = await import("jose");
+    const JWKS_URL = new URL(
+      `${process.env.BETTER_AUTH_URL || "http://localhost:5000"}/api/auth/jwks`
+    );
+    JWKS = createRemoteJWKSet(JWKS_URL);
+    jwtVerifyFn = jwtVerify;
+  }
+  return { JWKS, jwtVerify: jwtVerifyFn };
+};
 
 /**
  * Handle subscription check to avoid code duplication
@@ -63,6 +69,7 @@ const protect = async (req, res, next) => {
       const token = authHeader.substring(7); // "Bearer " এর পরের অংশটুকু নেওয়া হচ্ছে
       try {
         const baseURL = process.env.BETTER_AUTH_URL || "http://localhost:5000";
+        const { JWKS, jwtVerify } = await getJWKS();
         const { payload } = await jwtVerify(token, JWKS, {
           issuer: baseURL,   // JWT-এর Issuer অবশ্যই BETTER_AUTH_URL হতে হবে
           audience: baseURL, // JWT-এর Audience অবশ্যই BETTER_AUTH_URL হতে হবে
