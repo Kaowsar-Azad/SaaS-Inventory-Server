@@ -49,9 +49,14 @@ router.get("/stats", protect, async (req, res) => {
 
     const lowStockItems = lowStockCount;
 
-    // 4. Total Sales Amount
+    // 4. Total Sales Amount (Net Sales = Sales - Refunds)
     const sales = await Sale.find({ companyId });
-    const totalSales = sales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
+    const totalSalesGross = sales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
+    
+    const Return = mongoose.models.Return || require("../models/Return");
+    const returns = await Return.find({ companyId });
+    const totalRefunds = returns.reduce((sum, ret) => sum + (ret.refundAmount || 0), 0);
+    const totalSales = Math.max(0, totalSalesGross - totalRefunds);
 
     // 5. Total Purchases Amount
     const purchases = await Purchase.find({ companyId });

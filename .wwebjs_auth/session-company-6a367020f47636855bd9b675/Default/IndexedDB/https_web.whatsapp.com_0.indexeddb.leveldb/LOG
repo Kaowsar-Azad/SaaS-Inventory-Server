@@ -1,14 +1,2 @@
-2026/06/20-19:17:24.864 1534 Creating DB E:\SaaS Inventory  Project\SaaS Inventory Server\.wwebjs_auth\session-company-6a367020f47636855bd9b675\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb since it was missing.
-2026/06/20-19:17:24.880 1534 Reusing MANIFEST E:\SaaS Inventory  Project\SaaS Inventory Server\.wwebjs_auth\session-company-6a367020f47636855bd9b675\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
-2026/06/20-20:12:47.420 bac Level-0 table #5: started
-2026/06/20-20:12:47.455 bac Level-0 table #5: 1021205 bytes OK
-2026/06/20-20:12:47.463 bac Delete type=0 #3
-2026/06/20-21:09:30.749 bac Level-0 table #7: started
-2026/06/20-21:09:30.826 bac Level-0 table #7: 1096131 bytes OK
-2026/06/20-21:09:30.835 bac Delete type=0 #4
-2026/06/20-21:09:49.248 bac Compacting 1@1 + 1@2 files
-2026/06/20-21:09:49.415 bac Generated table #8@1: 25491 keys, 725327 bytes
-2026/06/20-21:09:49.416 bac Compacted 1@1 + 1@2 files => 725327 bytes
-2026/06/20-21:09:49.423 bac compacted to: files[ 0 0 1 0 0 0 0 ]
-2026/06/20-21:09:49.424 bac Delete type=2 #5
-2026/06/20-21:09:49.424 bac Delete type=2 #7
+2026/06/22-18:39:10.082 46d8 Creating DB E:\SaaS Inventory  Project\SaaS Inventory server\.wwebjs_auth\session-company-6a367020f47636855bd9b675\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb since it was missing.
+2026/06/22-18:39:10.099 46d8 Reusing MANIFEST E:\SaaS Inventory  Project\SaaS Inventory server\.wwebjs_auth\session-company-6a367020f47636855bd9b675\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001

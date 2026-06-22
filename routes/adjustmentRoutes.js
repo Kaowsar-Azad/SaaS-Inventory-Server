@@ -10,7 +10,7 @@ const router = express.Router();
 router.get("/", protect, checkPermission("adjustments"), async (req, res) => {
   try {
     const adjustments = await StockAdjustment.find({ companyId: req.user.companyId })
-      .populate("productId", "name sku")
+      .populate("productId", "name sku price")
       .populate("warehouseId", "name")
       .sort({ createdAt: -1 });
     res.json(adjustments);

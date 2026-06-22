@@ -1,7 +1,87 @@
 const { getAuth } = require("../lib/auth");
+const { jwtVerify, createRemoteJWKSet } = require("jose");
 
+// JWKS পাবলিক কি-সেটের URL — Better Auth স্বয়ংক্রিয়ভাবে এই এন্ডপয়েন্ট তৈরি করে
+const JWKS_URL = new URL(
+  `${process.env.BETTER_AUTH_URL || "http://localhost:5000"}/api/auth/jwks`
+);
+
+// createRemoteJWKSet কল করে JWKS রিমোট থেকে পাবলিক কি রিড করার ফাংশন তৈরি করা হচ্ছে
+const JWKS = createRemoteJWKSet(JWKS_URL);
+
+/**
+ * protect মিডলওয়্যার — দুইভাবে অথেন্টিকেশন সাপোর্ট করে:
+ * ১. Authorization: Bearer <JWT> হেডার — JWT ভেরিফাই করে JWKS দিয়ে
+ * ২. কুকি সেশন — Better Auth-এর getSession দিয়ে ভেরিফাই করে
+ */
 const protect = async (req, res, next) => {
   try {
+    // --------------------------------------------------
+    // পদ্ধতি ১: Authorization: Bearer <token> হেডার চেক
+    // --------------------------------------------------
+    const authHeader = req.headers["authorization"];
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.substring(7); // "Bearer " এর পরের অংশটুকু নেওয়া হচ্ছে
+      try {
+        const baseURL = process.env.BETTER_AUTH_URL || "http://localhost:5000";
+        const { payload } = await jwtVerify(token, JWKS, {
+          issuer: baseURL,   // JWT-এর Issuer অবশ্যই BETTER_AUTH_URL হতে হবে
+          audience: baseURL, // JWT-এর Audience অবশ্যই BETTER_AUTH_URL হতে হবে
+        });
+
+        // টোকেনের পে-লোড থেকে ইউজার ডেটা req.user-এ সেট করা হচ্ছে
+        req.user = {
+          id: payload.id,
+          email: payload.email,
+          name: payload.name,
+          role: payload.role,
+          companyId: payload.companyId,
+          companyName: payload.companyName,
+        };
+
+        // সাবস্ক্রিপশন চেক (জেডাব্লিউটি পাথেও একই লজিক প্রযোজ্য)
+        if (req.user.companyId) {
+          const Company = require("../models/Company");
+          const company = await Company.findById(req.user.companyId);
+          if (company) {
+            const now = new Date();
+            const isSubscriptionExpired =
+              company.subscriptionPlan !== "free" &&
+              company.subscriptionExpiresAt &&
+              new Date(company.subscriptionExpiresAt) < now;
+            if (isSubscriptionExpired && company.status !== "suspended") {
+              company.status = "suspended";
+              await company.save();
+            }
+            if (company.status === "suspended") {
+              const isBypass =
+                req.originalUrl.includes("/api/payments") ||
+                req.originalUrl.includes("/api/company/settings") ||
+                req.originalUrl.includes("/api/auth");
+              if (!isBypass) {
+                return res.status(402).json({
+                  message: "Subscription Expired or Suspended. Please complete payment to renew access.",
+                  code: "SUBSCRIPTION_EXPIRED",
+                  companyName: company.name,
+                });
+              }
+            }
+          }
+        }
+
+        return next();
+      } catch (jwtError) {
+        // JWT অবৈধ বা মেয়াদোত্তীর্ণ হলে 401 রিটার্ন করা হবে
+        return res.status(401).json({
+          message: "Invalid or expired JWT token",
+          error: jwtError.message,
+        });
+      }
+    }
+
+    // --------------------------------------------------
+    // পদ্ধতি ২: কুকি সেশন ভেরিফিকেশন (ডিফল্ট পদ্ধতি)
+    // --------------------------------------------------
     const authInstance = getAuth();
     const session = await authInstance.api.getSession({
       headers: req.headers
@@ -13,7 +93,7 @@ const protect = async (req, res, next) => {
 
     req.user = session.user;
 
-    // Check company subscription status
+    // সাবস্ক্রিপশন স্ট্যাটাস চেক
     if (req.user.companyId) {
       const Company = require("../models/Company");
       const company = await Company.findById(req.user.companyId);
@@ -26,7 +106,6 @@ const protect = async (req, res, next) => {
           new Date(company.subscriptionExpiresAt) < now;
 
         if (isSubscriptionExpired) {
-          // Auto suspend on expiration
           if (company.status !== "suspended") {
             company.status = "suspended";
             await company.save();
@@ -34,7 +113,6 @@ const protect = async (req, res, next) => {
         }
 
         if (company.status === "suspended") {
-          // Allow payment routes, company settings (so they can read status and pay) and auth routes
           const isBypass =
             req.originalUrl.includes("/api/payments") ||
             req.originalUrl.includes("/api/company/settings") ||
@@ -81,4 +159,3 @@ const checkPermission = (moduleName) => {
 };
 
 module.exports = { protect, checkPermission };
-
