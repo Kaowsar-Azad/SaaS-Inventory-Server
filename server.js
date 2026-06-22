@@ -80,9 +80,7 @@ const connectDB = async () => {
 
     // Initialize background cron scheduler
     const { initScheduler } = require("./lib/scheduler");
-    const { initAllFreeClientsOnStartup } = require("./lib/whatsappService");
     initScheduler();
-    initAllFreeClientsOnStartup();
 
     // Seed Super Admin
     const existingAdmin = await User.findOne({ role: "super_admin" });
