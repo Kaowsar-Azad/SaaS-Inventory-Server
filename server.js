@@ -39,7 +39,13 @@ app.use(express.json());
 // Ensure MongoDB is connected in serverless environment before any request is handled
 app.use(async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState !== 1) {
+    if (mongoose.connection.readyState === 2) {
+      // Wait for the connection to be established if it is already in progress
+      await new Promise((resolve) => {
+        mongoose.connection.once("connected", resolve);
+        mongoose.connection.once("error", resolve);
+      });
+    } else if (mongoose.connection.readyState !== 1) {
       const mongoUri = process.env.MONGODB_URI;
       if (!mongoUri) throw new Error("MONGODB_URI is not defined in environment variables");
       await mongoose.connect(mongoUri);
