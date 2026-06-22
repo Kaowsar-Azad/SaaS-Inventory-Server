@@ -36,6 +36,21 @@ app.use(cors({
 app.use("/api/payments/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
 
+// Ensure MongoDB is connected in serverless environment before any request is handled
+app.use(async (req, res, next) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      const mongoUri = process.env.MONGODB_URI;
+      if (!mongoUri) throw new Error("MONGODB_URI is not defined in environment variables");
+      await mongoose.connect(mongoUri);
+      console.log("MongoDB Connected lazily in middleware");
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Better Auth Route Handler
 const { toNodeHandler } = require("better-auth/node");
 const { getAuth } = require("./lib/auth");
