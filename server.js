@@ -52,13 +52,17 @@ app.use(async (req, res, next) => {
 });
 
 // Better Auth Route Handler
-const { toNodeHandler } = require("better-auth/node");
 const { getAuth } = require("./lib/auth");
+let toNodeHandlerFn = null;
 
 app.use("/api/auth", async (req, res, next) => {
   try {
+    if (!toNodeHandlerFn) {
+      const { toNodeHandler } = await import("better-auth/node");
+      toNodeHandlerFn = toNodeHandler;
+    }
     const authInstance = await getAuth();
-    return toNodeHandler(authInstance)(req, res, next);
+    return toNodeHandlerFn(authInstance)(req, res, next);
   } catch (err) {
     next(err);
   }
