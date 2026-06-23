@@ -158,9 +158,14 @@ if (process.env.NODE_ENV !== "production") {
   mongoose.connect(process.env.MONGODB_URI)
     .then(() => {
       console.log("MongoDB Connected for Vercel Serverless");
-      // Initialize background cron scheduler
-      const { initScheduler } = require("./lib/scheduler");
-      initScheduler();
+      
+      // Initialize background cron scheduler only if not in Vercel Serverless environment
+      if (!process.env.VERCEL) {
+        const { initScheduler } = require("./lib/scheduler");
+        initScheduler();
+      } else {
+        console.log("Skipping node-cron scheduler in Vercel Serverless environment");
+      }
     })
     .catch(err => console.error("Failed to connect to MongoDB", err));
 } else {
