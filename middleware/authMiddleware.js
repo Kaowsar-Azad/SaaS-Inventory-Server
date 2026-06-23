@@ -94,11 +94,8 @@ const protect = async (req, res, next) => {
 
         return next();
       } catch (jwtError) {
-        // JWT অবৈধ বা মেয়াদোত্তীর্ণ হলে 401 রিটার্ন করা হবে
-        return res.status(401).json({
-          message: "Invalid or expired JWT token",
-          error: jwtError.message,
-        });
+        // JWT অবৈধ বা মেয়াদোত্তীর্ণ হলে সরাসরি 401 রিটার্ন না করে কুকি সেশন চেক করতে Fallback করবো
+        console.warn("JWT verification failed, falling back to cookies:", jwtError.message);
       }
     }
 
