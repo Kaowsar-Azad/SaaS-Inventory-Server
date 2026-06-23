@@ -78,7 +78,8 @@ router.get("/stats", protect, async (req, res) => {
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-          total: { $sum: "$totalAmount" }
+          total: { $sum: "$totalAmount" },
+          count: { $sum: 1 }
         }
       },
       { $sort: { _id: 1 } }
@@ -93,7 +94,8 @@ router.get("/stats", protect, async (req, res) => {
       revenueHistory.push({
         date: dateStr,
         label: date.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" }),
-        amount: matched ? matched.total : 0
+        amount: matched ? matched.total : 0,
+        count: matched ? matched.count : 0
       });
     }
 
