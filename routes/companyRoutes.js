@@ -1,5 +1,6 @@
 const express = require("express");
 const Company = require("../models/Company");
+const User = require("../models/User");
 const { protect, checkPermission } = require("../middleware/authMiddleware");
 const logActivity = require("../lib/activityLogger");
 
@@ -65,6 +66,7 @@ router.put("/settings", protect, checkPermission("settings"), async (req, res) =
       whatsappFrom 
     } = req.body;
 
+    const oldName = company.name;
     company.name = name ?? company.name;
     company.email = email ?? company.email;
     company.phone = phone ?? company.phone;
@@ -87,6 +89,14 @@ router.put("/settings", protect, checkPermission("settings"), async (req, res) =
     }
 
     const updatedCompany = await company.save();
+
+    // Sync companyName on all users of this company when name changes
+    if (name && name !== oldName) {
+      await User.updateMany(
+        { companyId: updatedCompany._id.toString() },
+        { $set: { companyName: updatedCompany.name } }
+      );
+    }
 
     // Log Activity
     await logActivity(req, "UPDATE", "settings", `Updated company settings`);

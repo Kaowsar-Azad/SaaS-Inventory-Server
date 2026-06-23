@@ -79,7 +79,7 @@ router.get("/stats", protect, async (req, res) => {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
           total: { $sum: "$totalAmount" },
-          count: { $sum: 1 }
+          count: { $sum: "$quantity" }
         }
       },
       { $sort: { _id: 1 } }

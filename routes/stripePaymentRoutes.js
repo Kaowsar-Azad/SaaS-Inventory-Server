@@ -78,6 +78,105 @@ router.post("/create-checkout-session", protect, async (req, res) => {
   }
 });
 
+// @desc    Verify Stripe Checkout Session & update subscription plan
+// @route   POST /api/payments/verify-session
+// @access  Private
+router.post("/verify-session", protect, async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ message: "Missing sessionId parameter." });
+    }
+
+    // Retrieve the session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (!session) {
+      return res.status(404).json({ message: "Stripe session not found." });
+    }
+
+    if (session.payment_status === "paid") {
+      const companyId = session.client_reference_id || (session.metadata && session.metadata.companyId);
+      const plan = session.metadata && session.metadata.plan;
+
+      // Verify that this session belongs to the logged-in user's company
+      if (companyId !== req.user.companyId.toString()) {
+        return res.status(403).json({ message: "Unauthorized payment session verification." });
+      }
+
+      const company = await Company.findById(companyId);
+      if (company) {
+        // Only update if not already updated (to prevent duplicate expiry extensions)
+        const existingPayment = await Payment.findOne({ stripeSessionId: sessionId });
+        
+        if (!existingPayment || existingPayment.status !== "success") {
+          const durationDays = plan === "yearly" ? 365 : 30;
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + durationDays);
+
+          company.subscriptionPlan = plan;
+          company.subscriptionExpiresAt = expiresAt;
+          company.status = "active";
+          company.stripeSubscriptionId = session.subscription;
+          await company.save();
+
+          // Mark payment success in database
+          await Payment.findOneAndUpdate(
+            { stripeSessionId: sessionId },
+            { 
+              status: "success", 
+              stripeSubscriptionId: session.subscription,
+              invoiceNumber: session.invoice || `INV-${Date.now().toString().slice(-6)}`
+            },
+            { upsert: true }
+          );
+
+          console.log(`[Stripe Verification] Subscription activated for company ${company.name} until ${expiresAt}`);
+          
+          // Send confirmation email
+          try {
+            await sendEmail({
+              to: company.email,
+              subject: "SaaS Subscription Activated",
+              html: `
+                <div style="font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px;">
+                  <h2 style="color: #2563eb;">Subscription Successful</h2>
+                  <p>Dear ${company.name} Admin,</p>
+                  <p>We are excited to let you know that your subscription to the <strong>SaaS Inventory ${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan</strong> is now active!</p>
+                  <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                    <tr>
+                      <td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Subscription Plan:</strong></td>
+                      <td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right;">${plan.toUpperCase()}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Amount Paid:</strong></td>
+                      <td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right;">$${plan === "yearly" ? "100.00" : "10.00"} USD</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Expiry Date:</strong></td>
+                      <td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right;">${expiresAt.toDateString()}</td>
+                    </tr>
+                  </table>
+                  <p>Thank you for choosing SaaS Inventory. If you have any questions, feel free to reply to this email.</p>
+                  <br/>
+                  <p style="color: #666; font-size: 12px;">SaaS Inventory Team</p>
+                </div>
+              `
+            });
+          } catch (emailErr) {
+            console.error("[Verification Email Error] Failed to send activation email:", emailErr);
+          }
+        }
+        return res.json({ success: true, plan: company.subscriptionPlan, expiresAt: company.subscriptionExpiresAt });
+      }
+    }
+
+    res.json({ success: false, message: "Session is not fully paid yet." });
+  } catch (error) {
+    console.error("[Stripe] Verify Session error:", error);
+    res.status(500).json({ message: "Failed to verify session.", error: error.message });
+  }
+});
+
 // @desc    Get company billing history
 // @route   GET /api/payments/history
 // @access  Private
