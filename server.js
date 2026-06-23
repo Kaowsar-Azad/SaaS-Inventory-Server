@@ -153,7 +153,7 @@ const connectDB = async () => {
 
 if (process.env.NODE_ENV !== "production") {
   connectDB();
-} else {
+} else if (process.env.MONGODB_URI) {
   // For Vercel production serverless mode, connect to database immediately when imported
   mongoose.connect(process.env.MONGODB_URI)
     .then(() => {
@@ -163,6 +163,8 @@ if (process.env.NODE_ENV !== "production") {
       initScheduler();
     })
     .catch(err => console.error("Failed to connect to MongoDB", err));
+} else {
+  console.warn("MONGODB_URI is not defined in environment variables. Skipping early connection.");
 }
 
 module.exports = app;
