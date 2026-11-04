@@ -1,11 +1,18 @@
 node_modules/
-.env
 *.log
 .DS_Store
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .idea/
-.vscode/
 
 .vercel
+
+# Environment variables & secrets (added by GitHub Guardian)
+*.env
+!.env.example
+!.env.sample
+.envrc
+.venv/
+venv/
+config.bat
